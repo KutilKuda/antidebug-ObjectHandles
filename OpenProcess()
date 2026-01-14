@@ -1,0 +1,21 @@
+typedef DWORD (WINAPI *TCsrGetProcessId)(VOID);
+
+bool Check()
+{   
+    HMODULE hNtdll = LoadLibraryA("ntdll.dll");
+    if (!hNtdll)
+        return false;
+    
+    TCsrGetProcessId pfnCsrGetProcessId = (TCsrGetProcessId)GetProcAddress(hNtdll, "CsrGetProcessId");
+    if (!pfnCsrGetProcessId)
+        return false;
+
+    HANDLE hCsr = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pfnCsrGetProcessId());
+    if (hCsr != NULL)
+    {
+        CloseHandle(hCsr);
+        return true;
+    }        
+    else
+        return false;
+}
