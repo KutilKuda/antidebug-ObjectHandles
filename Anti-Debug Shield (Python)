@@ -1,0 +1,77 @@
+import ctypes
+import sys
+from ctypes import wintypes
+
+# Konfigurasi Windows API
+kernel32 = ctypes.windll.kernel32
+ntdll = ctypes.windll.ntdll
+
+def anti_debug_shield():
+    """
+    Menggabungkan 5 teknik Anti-Debug:
+    1. IsDebuggerPresent (PEB Flag)
+    2. CheckRemoteDebuggerPresent (Port Check)
+    3. CloseHandle (Exception Handling)
+    4. LoadLibrary (File Lock Check)
+    5. NtQueryObject (Kernel Object Scan)
+    """
+    print("[*] Menjalankan pemeriksaan keamanan sistem...")
+
+    # --- 1. IsDebuggerPresent ---
+    if kernel32.IsDebuggerPresent():
+        return "Terdeteksi: IsDebuggerPresent (Standard API)"
+
+    # --- 2. CheckRemoteDebuggerPresent ---
+    is_remote_present = wintypes.BOOL(False)
+    kernel32.CheckRemoteDebuggerPresent(kernel32.GetCurrentProcess(), ctypes.byref(is_remote_present))
+    if is_remote_present.value:
+        return "Terdeteksi: Remote Debugger (Port/Native)"
+
+    # --- 3. CloseHandle (Invalid Handle Exception) ---
+    try:
+        # Menutup handle sampah. Di bawah debugger, ini sering memicu exception
+        kernel32.CloseHandle(0xDEADBEEF)
+    except:
+        return "Terdeteksi: CloseHandle Exception (SEH)"
+
+    # --- 4. LoadLibrary (File Lock Check) ---
+    target_dll = "C:\\Windows\\System32\\calc.exe"
+    h_lib = kernel32.LoadLibraryA(target_dll.encode())
+    if h_lib:
+        h_file = kernel32.CreateFileA(
+            target_dll.encode(), 0x80000000, 0, None, 3, 0, None
+        )
+        if h_file == -1: # INVALID_HANDLE_VALUE
+            kernel32.FreeLibrary(h_lib)
+            return "Terdeteksi: LoadLibrary (File Locked by Debugger)"
+        kernel32.CloseHandle(h_file)
+        kernel32.FreeLibrary(h_lib)
+
+    # --- 5. NtQueryObject (DebugObject Scan) ---
+    size = wintypes.ULONG(0)
+    ntdll.NtQueryObject(0, 3, None, 0, ctypes.byref(size))
+    buffer = ctypes.create_string_buffer(size.value)
+    if ntdll.NtQueryObject(-1, 3, buffer, size.value, None) == 0:
+        # Mencari string "DebugObject" dalam format Unicode di buffer memori
+        if b"D\x00e\x00b\x00u\x00g\x00O\x00b\x00j\x00e\x00c\x00t" in buffer.raw:
+            return "Terdeteksi: NtQueryObject (Kernel DebugObject Found)"
+
+    return None # Sistem Bersih
+
+# --- INTEGRASI KE KODE UTAMA ---
+def main_with_shield():
+    detection = anti_debug_shield()
+    
+    if detection:
+        print(f"[!] {detection}")
+        print("[!] Lingkungan tidak aman. Mematikan diri...")
+        # Di sini kamu bisa kirim laporan ke Telegram sebelum mematikan diri
+        # sendTelResponse(f"Peringatan: Analis terdeteksi ({detection})")
+        sys.exit(0)
+    
+    print("[+] Sistem aman. Melanjutkan operasi...")
+    # Lanjutkan ke fungsi main() asli kamu di sini
+    # main_original()
+
+if __name__ == "__main__":
+    main_with_shield()Anti-Debug Shield (Python)
